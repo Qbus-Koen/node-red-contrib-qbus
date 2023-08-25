@@ -1,0 +1,12 @@
+{
+    "qbus": {
+        "label": {
+            "name": "Name",
+            "server2": "Server",
+            "output": "Output"
+        },
+        "placeholder": {
+			"name": "Name"
+        }
+    }
+}
