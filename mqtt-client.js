@@ -238,7 +238,7 @@ module.exports = function(RED) {
 
         unsubscribeMQTT() {
             var node = this;
-            node.log('MQTT Unsubscribe from mqtt topic: #');
+            //node.log('MQTT Unsubscribe from mqtt topic: #');
             node.mqtt.unsubscribe(node.getTopic('/#'), function(err) {});
             node.devices_values = {};
         }
@@ -294,6 +294,7 @@ module.exports = function(RED) {
             msg2send.topic = topic;
             msg2send.payload = messageString;
             node.emit('onMQTTMessage', msg2send);
+            
         }
 
         getBaseTopic() {

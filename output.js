@@ -6,6 +6,9 @@ module.exports = function(RED) {
         };
         res.sendFile(req.params[0], options);
       });
+
+      
+
     function Ctds(sn, id, client) {
         this.sn = sn
         this.id = id
@@ -26,7 +29,7 @@ module.exports = function(RED) {
         return ctds
     }
 
-    getOutputs = function(devices, ctd, type){
+    getOutputs = function(devices, ctd){
         var output = []
         if (ctd != null && devices != null) {
             // Loop over devices
@@ -49,6 +52,8 @@ module.exports = function(RED) {
         return output
     }
 
+   
+
     class QbusOutputNode {
         constructor(n) {
             RED.nodes.createNode(this,n);
@@ -58,16 +63,28 @@ module.exports = function(RED) {
 
             node.mqttClient = node.config.client
 
-            
+            node.outputList = []
 
             if (node.mqttClient) {
                 node.clientconn = RED.nodes.getNode(node.mqttClient)
 
+                
+                
+
                 if (node.clientconn != null) {
                     //node.clientconn = node.client.clientconn
-                    node.ctdid = node.config.ctdSn
-                    node.outpid = node.config.selOutput
+                    node.ctdid = node.config.selCtdUL
+                    //node.outpid = node.config.selOutput
                     node.name = node.config.selOutputName
+
+                    node.outputarray = node.config.selOutputs
+
+                    node.globalContext = node.context().global;
+                    var devices = node.globalContext.get("devices")
+                    // Get outputs 
+                    var outps = []
+                    outps = getOutputs(devices, node.ctdid);
+                    node.globalContext.set("outputs",outps)
 
                     // Send controller list to html dropdownbox
                     RED.httpAdmin.get("/qbus-client/ctds",  function(req, res) {
@@ -83,60 +100,57 @@ module.exports = function(RED) {
                     RED.httpAdmin.get("/qbus-client/outputs", function(req, res) {
                         var ctd = req.query.ctd
                         var type = req.query.type
-                        var outps = []
+                        
                         // Get all devices
                         node.globalContext = node.context().global;
                         var devices = node.globalContext.get("devices")
-                        // Get outputs by type
-                        outps = getOutputs(devices, ctd, type);
-                        // Get state of outputs
-                        //var outpString = JSON.stringify(outps);
-                        /*
-                        var cmd = outpString
-                        var topic = "cloudapp/QBUSMQTTGW/getState";
-                        
-                        node.serverConn.mqtt.publish(topic, cmd, {'qos':parseInt(0)},function(err) {
-                            if (err) {
-                                node.error(err);
-                            }
-                        });
-                        */
-                        // return outputs
+
+                        outps = getOutputs(devices, ctd, "");
+                        node.globalContext.set("outputs",outps)
                         res.json(outps);
                     });
 
-                    if (node.ctdid && node.outpid) {
-                        //node.log('Output ctdid ' + node.ctdid);
-                        //node.log('Output outpid ' + node.outpid);
-
+                    if (node.ctdid && node.outputarray) {
+                        //node.log(node.ctdid)
                         node.listener_onMQTTMessage = function(data) { node.onMQTTMessage(data); }
                         node.clientconn.on('onMQTTMessage', node.listener_onMQTTMessage);
+                        
+                        var items = []
+                        items = node.outputarray
 
-                        //node.listener_onStateUpdate = function(state) { node.onStateUpdate(state); }
-                        //node.clientConn.on('onStateUpdate', node.listener_onStateUpdate);
+                        items.forEach(loopOutputIds)
 
-                        subscribe()
-                        requestState()
+                        function loopOutputIds(item, index, arr) {
+                            subscribe(arr[index]);
+
+                        }
+
+                        requestState(items)
 
                         node.on("input", function(msg) {
-                            var cmd = '{"id":"' + node.outpid + '","type":"state","properties":{"' + msg.topic + '":' + msg.payload + '}}'
-                            var topic = "cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + node.outpid + "/setState"
-                            node.clientconn.mqtt.publish(topic, cmd,
-                                    {'qos':parseInt(node.clientconn.config.mqtt_qos||0)},
-                                    function(err) {
-                                        if (err) {
-                                            node.error(err);
-                                        }
-                            });
+                            var items = []
+                            items = node.outputarray
+
+                            items.forEach(loopOutputIds)
+
+                            function loopOutputIds(item, index, arr) {
+                                var cmd = '{"id":"' + arr[index] + '","type":"state","properties":{"' + msg.topic + '":' + msg.payload + '}}'
+                                var topic = "cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + arr[index] + "/setState"
+                                node.clientconn.mqtt.publish(topic, cmd,
+                                        {'qos':parseInt(node.clientconn.config.mqtt_qos||0)},
+                                        function(err) {
+                                            if (err) {
+                                                node.error(err);
+                                            }
+                                });
+                            }
                         })
 
                         node.on('close', function(done) {
                             done();
                         })
 
-                        function requestState() {
-                            var devs = []
-                            devs.push(node.outpid)
+                        function requestState(devs) {
                             var cmd = JSON.stringify(devs);
                             var topic = "cloudapp/QBUSMQTTGW/getState"
             
@@ -149,15 +163,11 @@ module.exports = function(RED) {
                             });
                         }
             
-                        function subscribe() {
-                            node.clientconn.subscribeMQTT("cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + node.outpid + "/state")
-                            node.clientconn.subscribeMQTT("cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + node.outpid + "/event")
+                        function subscribe(outputid) {
+                            node.clientconn.subscribeMQTT("cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + outputid + "/state")
+                            node.clientconn.subscribeMQTT("cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + outputid + "/event")
                         }
                     }
-
-                    
-
-
                 } else {
                     RED.httpAdmin.get("/qbus-client/ctds",  function(req, res) {
                         res.json({});
@@ -166,11 +176,7 @@ module.exports = function(RED) {
                         res.json({});
                     });
                 }
-            
             }
-
-            
-            
         }
 
         onStateUpdate(state) {
@@ -190,21 +196,16 @@ module.exports = function(RED) {
         }
 
         onMQTTMessage(topic, message) {
-            var node = this;
-            var pl = JSON.parse(topic.payload)
-            var  msg = {}
-            if (node.outpid === pl.id) {
-                //if (pl.properties.hasOwnProperty("value")){
-                //    msg.topic = "value";
-                //    msg.payload = pl.properties.value;
-                //    msg.name = node.name;
-                //    msg.outputId = node.outpid;
-                //    msg.ctdId = node.ctdid;
-                //    node.status({fill:"green", shape:"ring", text:"Value: " + msg.payload});
-                //} else {
-                    msg.topic = "state";
-                    msg.name = node.name;
-                    msg.outputId = node.outpid;
+            let node = this;
+            let pl = JSON.parse(topic.payload)
+            let  msg = {}
+            if (node.outputarray.includes(pl.id) ) {
+                node.globalContext = node.context().global;
+                    msg.topic = pl.type;
+                    let outps = node.globalContext.get("outputs")
+                    let obj = outps.find(o => o.id === pl.id);
+                    msg.name = obj.name
+                    msg.outputId = obj.id;
                     msg.ctdId = node.ctdid;
                     msg.payload = pl.properties;
                     node.status({fill:"green", shape:"ring", text:"Connected"});

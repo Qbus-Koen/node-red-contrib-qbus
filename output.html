@@ -1,8 +1,6 @@
 <script type="text/javascript">
     
     function editPrepare(node){
-
-
         var itemSelectionEl = $('#node-input-outputsO');
 
         itemSelectionEl.multiselect({
@@ -16,10 +14,21 @@
 
 
         function setTypes() {
+
+            $('#node-input-types')
+                .append($('<option>', { value : 'onoff' })
+                .text("Bistabiel")
+            ) 
+
             $('#node-input-types')
                 .append($('<option>', { value : 'analog' })
                 .text("Dimmer")
             ) 
+
+            $('#node-input-types')
+                .append($('<option>', { value : 'thermo' })
+                .text("Thermostaat")
+            )
 
             $('#node-input-types')
                 .append($('<option>', { value : 'gauge' })
@@ -27,8 +36,8 @@
             )
 
             $('#node-input-types')
-                .append($('<option>', { value : 'thermo' })
-                .text("Thermostaat")
+                .append($('<option>', { value : 'shutter' })
+                .text("Rolluiken")
             )
 
             $('#node-input-types')
@@ -37,10 +46,10 @@
             )
 
             $('#node-input-types')
-                .append($('<option>', { value : 'onoff' })
-                .text("Bistabiel")
-            ) 
-                        
+                .append($('<option>', { value : 'scene' })
+                .text("Sferen")
+            )
+      
             $('#node-input-types')
                 .append($('<option>', { value : 'all' })
                 .text("Alle uitgangen")
@@ -56,16 +65,12 @@
             $('#node-input-types').val(t)
         }
 
-        
-
         function requestOutputs(ctdi, oType){
             var type = oType
             var ctd = ctdi
             // Request outputs
             $.getJSON("/qbus-client/outputs", {"ctd":ctd, "type": type}, function(outputs) {
-
                 itemSelectionEl.children().remove();
-
                 var items = outputs;
 
                 items.sort(function (a, b) {
@@ -77,45 +82,34 @@
                                 return 0;
                         });
 
-                        
-
                 // Add outputs to dropdown
                 for (i = 0; i < items.length; i++) {
                     if (type == 'all') {
                         itemSelectionEl
                             .append($('<option>', { value : items[i].id, type :  items[i].type})
                             .text(items[i].name)) 
-                    } else if (items[i].type == type){
-                        itemSelectionEl
-                            .append($('<option>', { value : items[i].id, type :  items[i].type})
-                            .text(items[i].name)) 
+                    } else {
+                        if (items[i].type == type){
+                            itemSelectionEl
+                                .append($('<option>', { value : items[i].id, type :  items[i].type})
+                                .text(items[i].name)) 
+                        } 
                     }
                 }
 
-                //itemSelectionEl.val(itemName);
-                //itemSelectionEl.val(itemName);
-
-                if (node.selOutput) {
-                    let o = node.selOutput
-                    itemSelectionEl.val(o)
+                if (node.selOutputs) {
+                    itemSelectionEl.val(node.selOutputs);
                 }
-
-                itemSelectionEl.multiselect('rebuild');
-                // Set dropdown to saved output
-                //$('#node-input-outputsO').val(node.selOutput)
-
                 
+                itemSelectionEl.multiselect('rebuild');
 
                 $("#node-input-outputsO").on('change', function(event, type, value) {
-                    node.selOutput = $('#node-input-outputsO option:selected');
-                    //var outpName = $('#node-input-outputsO option:selected').text();
-                    node.selOutputName  = $('#node-input-outputsO option:selected').text();
-
-                    $('#node-input-name').val(node.selOutputName)
-
-                    node.selName = node.selOutputName;
-                    //node.selName = outpName;
-
+                    var sel = $('#node-input-outputsO option:selected');
+                    var selected = [];
+                    sel.each(function(){
+                        selected.push($(this).val());
+                    });
+                    node.selOutputs = selected;
                 });
             
                 
@@ -129,14 +123,11 @@
             
             $.getJSON("/qbus-client/ctds", function(ctd) {
                 // Add ctds to dropdown
-                //debugger
                 for (i = 0; i < ctd.length; i++) {
-                    //if (ctd[i].client == $('#node-input-client option:selected').text()) {
                     $('#node-input-ctdSn')
                         .append($('<option>', { value : ctd[i].id })
                         .text(ctd[i].sn)) 
-                        }
-                //}
+                }
 
                 $('#node-input-types').val("all")
 
@@ -152,17 +143,12 @@
                     requestOutputs(ctdul, type)
                 }
 
-
-
-                //requestOutputs(node.selCtd, node.typeO)
-
             }).fail(function(jqXHR, textStatus, errorThrown) { console.log('Failed to get Controllers list, please connect to MQTT server first.'); }) 
 
         }
 
         $('#node-input-client').on('change', function(event, type, value) {
             var client = $('#node-input-client option:selected').val()
-            //debugger
             if (client.toString() != "_ADD_"){
                 requestControllers();
             } else {
@@ -202,9 +188,9 @@
         color: '#F3B567',
         defaults: {
             client: {value:"", type:"mqtt-client"},  // input
-            ctdSn: {value: null},       // UL ID CTD 
-            selCtdUL: {value: ""},     // UL ID OUTPUT
-            selOutput: {value: ""},     // UL ID OUTPUT
+            ctdSn: {value: null},       // sn ID CTD 
+            selCtdUL: {value: ""},     // UL ID ctd
+            selOutputs: {value: ""},     // UL ID OUTPUT
             selOutputName: {value: ""}, // UL NAME OUTPUT
             outputsO: {value:""},       // UL ID OUTPUT NAME IN DROPDOWN
             name: {value: ""},          // Name for node (input)
@@ -230,19 +216,14 @@
             if (ctd2save){
                 this.selCtdUL = ctd2save.toString()
             }
-            if (output2save){
-                this.selOutput = output2save.toString()
-            }
+            //if (output2save){
+            //    this.selOutputs = output2save
+            //}
             if (type2save){
                 this.typeO = type2save.toString()
             }
 
-            this.selName = this-input-name
-
-
-            //this.selCtdUL = $('#node-input-ctdSn option:selected').val().toString();
-            //this.selOutput = $('#node-input-outputsO option:selected').val().toString();
-            //this.typeO = $('#node-input-types option:selected').val().toString();
+           // this.selName = this.input.name
         },
         oneditcancel: function() {
         }
@@ -250,7 +231,6 @@
 </script>
 
 <script type="text/x-red" data-template-name="qbus-output">
-
     <link rel="stylesheet" href="static/css/bootstrap-multiselect.css" type="text/css" />
     <style type="text/css">
         .btn-group {
@@ -292,9 +272,9 @@
             margin-right: 0
         }
 
- 
-
+        .multiselect-container > li.disabled { display:none;}
     </style>
+
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-empire"></i> <span data-i18n="qbus.label.name"></span></label>
         <input type="text" id="node-input-name" data-i18n="[placeholder]qbus.placeholder.name">
@@ -320,7 +300,7 @@
 
     <div class="form-row">
         <label for="node-input-outputsO"><i class="fa fa-empire"></i> Output</label>
-        <select class='select' id="node-input-outputsO" >
+        <select class='select' multiple="multiple" id="node-input-outputsO" >
         </select>
     </div>
 
