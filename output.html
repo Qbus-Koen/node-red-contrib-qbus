@@ -12,9 +12,10 @@
                 disabledText: 'No items found...'
             });
 
-
+            //$('#node-input-types').empty()
         function setTypes() {
-
+            
+            
             $('#node-input-types')
                 .append($('<option>', { value : 'onoff' })
                 .text("Bistabiel")
@@ -54,6 +55,8 @@
                 .append($('<option>', { value : 'all' })
                 .text("Alle uitgangen")
             ) 
+
+            //$('#node-input-types').val("all")
         }
 
         setTypes()
@@ -68,52 +71,84 @@
         function requestOutputs(ctdi, oType){
             var type = oType
             var ctd = ctdi
-            // Request outputs
-            $.getJSON("/qbus-client/outputs", {"ctd":ctd, "type": type}, function(outputs) {
-                itemSelectionEl.children().remove();
-                var items = outputs;
+            var conn = false
+            
 
-                items.sort(function (a, b) {
-                            if (a.name < b.name)
-                                return -1;
-                            else if (a.name > b.name)
-                                return 1;
-                            else
-                                return 0;
+            $("#node-button-activate").hide();
+
+            $.getJSON("/qbus-client/connectable", {"ctd":ctd}, function(c) {
+                //console.log(c)
+                conn = c.connectable
+
+                if (conn == false){
+                    $("#node-button-activate").show();
+                   // $('#node-input-types').empty();
+                    itemSelectionEl.children().remove();
+
+                    itemSelectionEl.multiselect('rebuild');
+
+                } else {
+                    // Controller ready to accept connection; request outputs
+                    
+                    $.getJSON("/qbus-client/outputs", {"ctd":ctd, "type": type}, function(outputs) {
+                        itemSelectionEl.children().remove();
+                        var items = outputs;
+                        
+                        
+                        items.sort(function (a, b) {
+                                    if (a.name < b.name)
+                                        return -1;
+                                    else if (a.name > b.name)
+                                        return 1;
+                                    else
+                                        return 0;
+                                });
+
+                        // Add outputs to dropdown
+                        for (i = 0; i < items.length; i++) {
+                            if (type == 'all') {
+                                itemSelectionEl
+                                    .append($('<option>', { value : items[i].id, type :  items[i].type})
+                                    .text(items[i].name)) 
+                            } else {
+                                if (items[i].type == type){
+                                    itemSelectionEl
+                                        .append($('<option>', { value : items[i].id, type :  items[i].type})
+                                        .text(items[i].name)) 
+                                } 
+                            }
+                        }
+
+                        if (node.selOutputs) {
+                            itemSelectionEl.val(node.selOutputs);
+                        }
+                        
+                        itemSelectionEl.multiselect('rebuild');
+
+
+
+                        $("#node-input-outputsO").on('change', function(event, type, value) {
+                            var sel = $('#node-input-outputsO option:selected');
+                            var selected = [];
+                            sel.each(function(){
+                                selected.push($(this).val());
+                            });
+                            node.selOutputs = selected;
                         });
 
-                // Add outputs to dropdown
-                for (i = 0; i < items.length; i++) {
-                    if (type == 'all') {
-                        itemSelectionEl
-                            .append($('<option>', { value : items[i].id, type :  items[i].type})
-                            .text(items[i].name)) 
-                    } else {
-                        if (items[i].type == type){
-                            itemSelectionEl
-                                .append($('<option>', { value : items[i].id, type :  items[i].type})
-                                .text(items[i].name)) 
-                        } 
-                    }
-                }
-
-                if (node.selOutputs) {
-                    itemSelectionEl.val(node.selOutputs);
+                    
+                    }).fail(function(jqXHR, textStatus, errorThrown) { console.log('Failed to get Bistables list, please configure controller first.'); })
                 }
                 
-                itemSelectionEl.multiselect('rebuild');
+               
+                    
+            }).fail(function(jqXHR, textStatus, errorThrown) { console.log('Failed to get Controllers list, please connect to MQTT server first.'); }) 
 
-                $("#node-input-outputsO").on('change', function(event, type, value) {
-                    var sel = $('#node-input-outputsO option:selected');
-                    var selected = [];
-                    sel.each(function(){
-                        selected.push($(this).val());
-                    });
-                    node.selOutputs = selected;
-                });
             
                 
-            }).fail(function(jqXHR, textStatus, errorThrown) { console.log('Failed to get Bistables list, please configure controller first.'); })
+                
+            
+  
             
 
         }
@@ -129,17 +164,15 @@
                         .text(ctd[i].sn)) 
                 }
 
-                $('#node-input-types').val("all")
-
                 if (node.selCtdUL) {
                     let c = node.selCtdUL.toString()
                     $('#node-input-ctdSn').val(c)
                     var type = $('#node-input-types option:selected').val();
-                    var ctdul = $('#node-input-ctdSn').val()
+                    var ctdul = $('#node-input-ctdSn').val();
                     requestOutputs(ctdul, type)
                 } else {
                     var type = $('#node-input-types option:selected').val();
-                    var ctdul = $('#node-input-ctdSn option:selected').val()
+                    var ctdul = $('#node-input-ctdSn option:selected').val();
                     requestOutputs(ctdul, type)
                 }
 
@@ -158,25 +191,37 @@
         });
 
         $('#node-input-ctdSn').on('change', function(event, type, value) {
+            //setTypes()
             var type = $('#node-input-types option:selected').val();
             var ctdul = $('#node-input-ctdSn option:selected').val()
             var client = $('#node-input-client option:selected').val()
 
+            
+
             if (client.toString() != "_ADD_"){
                 requestOutputs(ctdul, type)
             } 
+
+            
         });
 
         $("#node-input-types").on('change', function(event, type, value) {
             var type = $('#node-input-types option:selected').val();
-            var ctdul = $('#node-input-ctdSn option:selected').val()
+            var ctdul = $('#node-input-ctdSn option:selected').val();
             node.typeO = type
             if (ctdul){
                 requestOutputs(ctdul, type)
             }
             
         });
-        
+
+        $("#node-button-activate").on('click', function() {
+            var ctdul = $('#node-input-ctdSn option:selected').val();
+            $.getJSON("/qbus-client/activate", {"ctd":ctdul}, function(connectable) {
+                console.log("Activating controller " + ctdul)
+            }).fail(function(jqXHR, textStatus, errorThrown) { console.log('Failed to get Controllers list, please connect to MQTT server first.'); }) 
+
+        });
     }
 
 </script>
@@ -290,6 +335,7 @@
         <label for="node-input-ctdSn"><i class="fa fa-tag"></i> CTD</label>
         <select id="node-input-ctdSn">
         </select>
+        <button type="button" class="red-ui-button" id="node-button-activate">Activate controller</button>
     </div>
 
     <div class="form-row">

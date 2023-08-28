@@ -51,10 +51,11 @@ module.exports = function(RED) {
         }
         return output
     }
-
+    outputList = []
    
 
     class QbusOutputNode {
+       
         constructor(n) {
             RED.nodes.createNode(this,n);
 
@@ -63,28 +64,24 @@ module.exports = function(RED) {
 
             node.mqttClient = node.config.client
 
-            node.outputList = []
+            node.connected = false
+            node.connectable = false
 
             if (node.mqttClient) {
                 node.clientconn = RED.nodes.getNode(node.mqttClient)
-
-                
-                
-
                 if (node.clientconn != null) {
-                    //node.clientconn = node.client.clientconn
                     node.ctdid = node.config.selCtdUL
-                    //node.outpid = node.config.selOutput
                     node.name = node.config.selOutputName
-
                     node.outputarray = node.config.selOutputs
 
                     node.globalContext = node.context().global;
                     var devices = node.globalContext.get("devices")
+
                     // Get outputs 
                     var outps = []
                     outps = getOutputs(devices, node.ctdid);
-                    node.globalContext.set("outputs",outps)
+                    outputList = outps
+                    //node.globalContext.set("outputs",outps)
 
                     // Send controller list to html dropdownbox
                     RED.httpAdmin.get("/qbus-client/ctds",  function(req, res) {
@@ -92,32 +89,67 @@ module.exports = function(RED) {
                         node.globalContext = node.context().global;
                         var devs = node.globalContext.get("devices")
                         var ctds = GetCtds(devs)
-                        RED.log.debug("qbus.js - ctd's: " + ctds[0].sn);
                         res.json(ctds);
                     });
 
                     // Send output list to html dropdownbox
                     RED.httpAdmin.get("/qbus-client/outputs", function(req, res) {
                         var ctd = req.query.ctd
-                        var type = req.query.type
                         
                         // Get all devices
                         node.globalContext = node.context().global;
                         var devices = node.globalContext.get("devices")
 
                         outps = getOutputs(devices, ctd, "");
-                        node.globalContext.set("outputs",outps)
+                        outputList = outps
                         res.json(outps);
+                    });
+
+                    // Send connected state to html
+                    RED.httpAdmin.get("/qbus-client/connectable", function(req, res) {
+                        var ctd = req.query.ctd
+                        var devices = node.globalContext.get("devices")
+                        var conn = false
+                        for (j = 0; j < devices.length; j++) {
+                            if (devices[j].id == ctd) {
+                                conn = devices[j].connectable
+                            }
+                        }
+                        res.json({'connectable': conn})
+                    });
+
+                    // Activate controller
+                    RED.httpAdmin.get("/qbus-client/activate", function(req, res) {
+                        //msg.state = false
+                        //msg.payload = "CTD " + node.selCtd + " NOT READY FOR MQTT - UPDATING FIRMWARE..."
+                        var ctd = req.query.ctd
+
+                        var cmd = {"id":ctd,"type":"action","action":"activate","properties":{"authKey": "ubielite"}}
+                        var topic = "cloudapp/QBUSMQTTGW/" + ctd + "/setState";
+
+                        node.clientconn.mqtt.publish(topic, JSON.stringify(cmd),
+                                {'qos':parseInt(node.clientconn.config.mqtt_qos||0)},
+                                function(err) {
+                                    if (err) {
+                                        node.error(err);
+                                    }
+                        });
+
                     });
 
                     if (node.ctdid && node.outputarray) {
                         //node.log(node.ctdid)
                         node.listener_onMQTTMessage = function(data) { node.onMQTTMessage(data); }
                         node.clientconn.on('onMQTTMessage', node.listener_onMQTTMessage);
+
+                        //subscribe to controller states
+                        node.clientconn.subscribeMQTT("cloudapp/QBUSMQTTGW/" + node.ctdid + "/state")
+
                         
                         var items = []
                         items = node.outputarray
 
+                        // Subscribe to output states and events
                         items.forEach(loopOutputIds)
 
                         function loopOutputIds(item, index, arr) {
@@ -198,19 +230,31 @@ module.exports = function(RED) {
         onMQTTMessage(topic, message) {
             let node = this;
             let pl = JSON.parse(topic.payload)
+            //console.log(topic)
             let  msg = {}
+            var top = topic.topic
+
+
+
             if (node.outputarray.includes(pl.id) ) {
                 node.globalContext = node.context().global;
-                    msg.topic = pl.type;
-                    let outps = node.globalContext.get("outputs")
-                    let obj = outps.find(o => o.id === pl.id);
+                msg.topic = pl.type;
+                let outps = outputList
+                let obj = outps.find(o => o.id === pl.id);
+                try {
                     msg.name = obj.name
-                    msg.outputId = obj.id;
+                    msg.outputId = pl.id;
                     msg.ctdId = node.ctdid;
                     msg.payload = pl.properties;
                     node.status({fill:"green", shape:"ring", text:"Connected"});
-               // }
-                node.send(msg);
+                    node.send(msg);
+                } catch {
+                    node.log("error")
+                }
+
+                //node.log(obj)
+
+                
             }
         }
 

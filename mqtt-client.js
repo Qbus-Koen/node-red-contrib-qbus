@@ -1,7 +1,8 @@
 var mqtt = require('mqtt');
 module.exports = function(RED) {
-    function Device(client, id, ctdSn, outputArray) {
+    function Device(client, id, connectable, ctdSn, outputArray) {
         this.client = client
+        this.connectable   = connectable
         this.id = id
         this.ctdSn = ctdSn
         this.outputArray = outputArray
@@ -13,7 +14,14 @@ module.exports = function(RED) {
         this.name = name
     }
 
-    GetDevices = function (devs, client) {
+    function Connection(id, connected, connectable) {
+        this.id = id;
+        this.connected = connected;
+        this.connectable = connectable;
+    }
+
+
+    GetDevices = function (devs, client, conn) {
         RED.log.debug("Processing devices ");
         var devices = new Array();
         if (devs != null) {
@@ -62,7 +70,7 @@ module.exports = function(RED) {
                     
                 }
             }
-            devices.push(new Device(client, devs[i].id, devs[i].serialNr, outputs))
+            devices.push(new Device(client, devs[i].id, conn, devs[i].serialNr, outputs))
             
         }
         return devices;
@@ -104,6 +112,7 @@ module.exports = function(RED) {
             var timeout = null;
             var timeout_ms = 60000;
             var client = node.connectMQTT('tmp');
+            var conn = false
 
             client.on('connect', function() {
                 //end function after timeout, if no response
@@ -143,6 +152,22 @@ module.exports = function(RED) {
                     //node.log("Initial state: " + message)
                 } else if (topic.includes("/state")) {
                     //node.log("Connection state: " + message)
+                    obj = JSON.parse(message)
+                    var id = obj.id
+                    var conn = obj.properties.connectable
+
+
+                    var devices = node.globalContext.get("devices")
+
+                    for (j = 0; j < devices.length; j++) {
+                        //console.log(devices[j].connected)
+                        if (devices[j].id == id) {
+                            devices[j].connectable = conn
+                        }
+                    }
+                    node.globalContext.set("devices",devices)
+
+                    
                      client.end(true);
                 } else if (node.getTopic('/config') === topic) {
                     // Handle config message
@@ -154,7 +179,7 @@ module.exports = function(RED) {
                     }
 
                     if (obj.hasOwnProperty("devices") ){
-                        var devices = GetDevices(obj.devices, node.name)
+                        var devices = GetDevices(obj.devices, node.name, conn)
                         node.globalContext.set("devices",devices)
                         var i = 0
                         var devs = []
