@@ -2,8 +2,10 @@
     "qbus": {
         "label": {
             "name": "Name",
-            "server2": "Server",
-            "output": "Output"
+            "client": "Mqtt client",
+            "ctd": "Controller s/n",
+            "type": "Type uitgang",
+            "output": "Uitgang"
         },
         "placeholder": {
 			"name": "Name"

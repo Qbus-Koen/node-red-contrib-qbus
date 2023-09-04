@@ -73,6 +73,8 @@ module.exports = function(RED) {
                     node.ctdid = node.config.selCtdUL
                     node.name = node.config.selOutputName
                     node.outputarray = node.config.selOutputs
+                    node.type = node.config.typeO
+                    node.ctdSn = node.config.selCtdSn
 
                     node.globalContext = node.context().global;
                     var devices = node.globalContext.get("devices")
@@ -161,13 +163,34 @@ module.exports = function(RED) {
 
                         node.on("input", function(msg) {
                             var items = []
+                            var type = node.type
+                            
                             items = node.outputarray
 
                             items.forEach(loopOutputIds)
 
                             function loopOutputIds(item, index, arr) {
-                                var cmd = '{"id":"' + arr[index] + '","type":"state","properties":{"' + msg.topic + '":' + msg.payload + '}}'
-                                var topic = "cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + arr[index] + "/setState"
+                                
+                                var cmd = ""
+                                var topic = ""
+
+                                if (type == 'scene') {
+                                    cmd = '{"id":"' + arr[index] + '","type":"action","action":"active"}'
+                                    topic = "cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + arr[index] + "/setState"
+                                //} //else if (type == 'thermo') {
+                                   // cmd = '{"id":"' + arr[index] + '","type":"action","action":"active"}'
+                                   // topic = "cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + arr[index] + "/setState"
+                                } else {
+                                    topic = "cloudapp/QBUSMQTTGW/" + node.ctdid + "/" + arr[index] + "/setState"
+                                    if (typeof msg.payload == "string") {
+                                        cmd = '{"id":"' + arr[index] + '","type":"state","properties":{"' + msg.topic + '":"' + msg.payload + '"}}'
+                                    } else {
+                                        cmd = '{"id":"' + arr[index] + '","type":"state","properties":{"' + msg.topic + '":' + msg.payload + '}}'
+                                        
+                                    }
+                                }
+
+                                
                                 node.clientconn.mqtt.publish(topic, cmd,
                                         {'qos':parseInt(node.clientconn.config.mqtt_qos||0)},
                                         function(err) {
@@ -245,6 +268,7 @@ module.exports = function(RED) {
                     msg.name = obj.name
                     msg.outputId = pl.id;
                     msg.ctdId = node.ctdid;
+                    msg.ctdSn = node.ctdSn;
                     msg.payload = pl.properties;
                     node.status({fill:"green", shape:"ring", text:"Connected"});
                     node.send(msg);
